@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -89,6 +88,7 @@
       width:100%;
     }
     .btn:hover{background:var(--green-dark);transform:translateY(-1px)}
+    .btn:disabled{background:var(--muted);cursor:not-allowed;opacity:0.6}
     .btn.secondary{background:#111827}
     .btn.secondary:hover{background:#0f172a}
     .btn.ghost{background:#eef2ff;color:#3730a3}
@@ -229,10 +229,10 @@
               <option value="Ön Sipariş">Ön Sipariş</option>
             </select>
           </div>
-          <button class="btn" type="submit">WhatsApp ile Siparişi Gönder</button>
+          <button class="btn" type="submit" id="submitBtn">WhatsApp ile Siparişi Gönder</button>
           <button class="btn secondary" type="button" onclick="clearCart()">Sepeti Temizle</button>
           <div class="footer-note">
-            WhatsApp numaranı aşağıdaki kodda <b>WA_NUMBER</b> alanına yaz.
+            WhatsApp numaranı aşağıdaki kodda <b>WA_NUMBER</b> alanına yazınız.
           </div>
         </form>
       </div>
@@ -253,7 +253,7 @@
   </div>
 
   <script>
-    const WA_NUMBER = "905457462446"; // Burayı kendi numaranla değiştir
+    const WA_NUMBER = "905457462446"; // Kendi numaranızla değiştirin (Başında ülke koduyla örn: 905xxxxxxxxx)
     const API = "https://script.google.com/macros/s/AKfycbzKpP2wIGwjNpPR0P3KnAjKT-FDDAvo7rAmGJofm7Gpzzr2bojVENzMJp3vBkQRdoCtdA/exec";
 
     const products = [
@@ -317,6 +317,7 @@
     const featuredList = document.getElementById("featuredList");
     const cartSummary = document.getElementById("cartSummary");
     const cartLines = document.getElementById("cartLines");
+    const submitBtn = document.getElementById("submitBtn");
 
     function statusChip(status){
       if(status === "Ön Sipariş") return "chip yellow";
@@ -444,7 +445,8 @@
       render();
     }
 
-    function submitOrder(event){
+    // Google Veritabanı kaydı ve WhatsApp yönlendirmesi asenkron hale getirildi
+    async function submitOrder(event){
       event.preventDefault();
 
       if(!cart.length){
@@ -452,8 +454,9 @@
         return;
       }
 
-      if(WA_NUMBER === "9055457462446"){
-        alert("Önce kod içindeki WA_NUMBER alanını kendi numaranla değiştir.");
+      // Hatalı sabit numara kontrolü düzeltildi
+      if(WA_NUMBER === "905457462446"){
+        alert("Önce kod içindeki WA_NUMBER alanını kendi numaranızla değiştirin.");
         return;
       }
 
@@ -467,32 +470,42 @@
       const total = cart.reduce((sum, item) => sum + (item.qty * item.price), 0);
       const lines = cart.map(item => `• ${item.name} — ${item.qty} ${item.unit} (${item.delivery} teslim)`).join("\n");
 
-      // GOOGLE APPS SCRIPT API ENTEGRASYONU (Arka planda çalışır)
-      cart.forEach(item => {
-        fetch(API, {
+      // Butonu işlem bitene kadar kilitleyelim (Çift tıklamayı önler)
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Veritabanına kaydediliyor...";
+
+      // GOOGLE APPS SCRIPT API ENTEGRASYONU (Döngü yerine tek paket halinde gönderim)
+      try {
+        const urun Detaylari = cart.map(item => `${item.name}: ${item.qty} ${item.unit}`).join(", ");
+        
+        await fetch(API, {
           method: "POST",
           body: JSON.stringify({
             isim: name,
             telefon: phone,
             adres: address,
-            urun: item.name,
-            miktar: `${item.qty} ${item.unit}`
+            urun: urunDetaylari,
+            miktar: `${total} TL`,
+            not: note || "-"
           })
-        }).catch(err => console.log("Veritabanı hatası:", err));
-      });
+        });
+      } catch (err) {
+        console.log("Veritabanı kayıt hatası (Yine de WhatsApp'a yönlendiriliyorsunuz):", err);
+      }
 
       // WHATSAPP YÖNLENDİRMESİ
       const message = `Merhaba, sipariş vermek istiyorum.\n\nAd Soyad: ${name}\nTelefon: ${phone}\nAdres: ${address}\nTeslimat Günü: ${deliveryDay}\nSipariş Tipi: ${orderType}\n\nSiparişler:\n${lines}\n\nTahmini Toplam: ${total} TL\nNot: ${note || "-"}`;
-
       const url = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(message)}`;
-      window.open(url, "_blank");
+      
+      // Formu sıfırla ve butonu eski haline getir
+      submitBtn.disabled = false;
+      submitBtn.textContent = "WhatsApp ile Siparişi Gönder";
 
-      alert("Sipariş alındı ve WhatsApp mesajı hazırlandı.");
+      // Güvenli yönlendirme
+      window.location.href = url;
     }
 
     render();
   </script>
 </body>
 </html>
-
-```
